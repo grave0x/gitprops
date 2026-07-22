@@ -1,116 +1,46 @@
-# respectfb — Fork-Based Distributed Respect System
+# gitprops
 
-A git-native peer-to-peer respect/reputation system for GitHub users.
-Each user's fork of this repo is their personal respect ledger. A GitHub App
-handles authentication and commits. Respect syncs through pull requests.
+Give props to people on GitHub. Data lives in git.
 
-## How It Works
+## What it does
 
-```
-  You (Browser)           GitHub App Server        Your Fork           Central Repo
-  ┌──────────┐  OAuth    ┌──────────────┐  commit  ┌──────────┐  sync  ┌──────────┐
-  │userscript│ ────────▶ │ Express App  │ ───────▶ │you/rspfb │ ──PR──▶│org/rspfb │
-  │  👍 UI   │◀─ totals─ │ OAuth + API  │          │respects/ │        │aggregate │
-  └──────────┘           └──────────────┘          │you.json  │        │totals    │
-                                                    └──────────┘        └──────────┘
-```
+A userscript adds a thumbs-up button next to usernames on GitHub. Click it, pick
+a score (1-5), optionally say why. Your props are committed as JSON to this repo. 
 
-1. **Fork this repo** — your fork at `{you}/respectfb` is your personal ledger
-2. **Login via OAuth** — the userscript opens a GitHub OAuth flow (no PAT needed)
-3. **Give respect** — the GitHub App commits `respects/{you}.json` to YOUR fork
-4. **Sync** — the App opens PRs from your fork back to this central repo
-5. **Aggregate** — `aggregate.yml` computes totals from all merged ledgers
-6. **Display** — the userscript reads totals and shows 👍 badges
+A GitHub Action merges everyone's props into totals. The userscript polls and
+shows scores next to usernames everywhere.
 
-## Repo Structure
+## Setup
 
-```
-respectfb/
-├── respects/            # Per-user ledgers (one JSON file per user)
-│   └── {username}.json  # Committed by the GitHub App
-├── aggregate/           # Computed global totals
-│   └── totals.json
-├── schema.json          # JSON Schema for ledgers
-├── .gitignore
-├── .github/workflows/
-│   └── aggregate.yml    # Runs on central repo after merges
-└── README.md
-```
+### You need
 
-## Setting Up Your Instance
+- A GitHub App (for OAuth login)
+- A server running the App code (Express + Octokit)
+- The [userscript](userscript/github-respect.user.js) in Violentmonkey
 
-### 1. Fork this repo
+### Quick start
 
-Click Fork → your `{username}/respectfb`.
+[Install the userscript](https://github.com/grave0x/respectfb/raw/main/userscript/github-respect.user.js).
+Set the App server URL in settings. Login with GitHub.
 
-### 2. Register a GitHub App
+## How data is stored
 
-1. Go to **Settings → Developer settings → GitHub Apps → New GitHub App**
-2. Set:
-   - **Name**: `respectfb`
-   - **Homepage URL**: your App server URL
-   - **Callback URL**: `{server}/api/auth/callback`
-   - **Webhook URL**: `{server}/webhook`
-   - **Webhook secret**: a random string
-3. **Permissions**:
-   - Repository **Contents**: Read & write
-   - Repository **Pull requests**: Read & write
-   - Account **Email addresses**: Read-only
-4. **Subscribe to events**: Push
-5. Generate and download a **private key**
-6. Note the **App ID**, **Client ID**, and **Client Secret**
+Each user gets one file in `respects/`:
 
-### 3. Install the App
-
-Install the GitHub App on your fork and the central repo.
-
-### 4. Run the App server
-
-```bash
-cd app-server/
-cp .env.example .env
-# Fill in GITHUB_APP_ID, private key, CLIENT_ID, CLIENT_SECRET,
-# CENTRAL_REPO_OWNER, CENTRAL_REPO_NAME, SESSION_SECRET, WEBHOOK_SECRET
-npm install
-npm start
-```
-
-### 5. Install the userscript
-
-1. Open Violentmonkey → create new script
-2. Paste `userscript/github-respect.user.js`
-3. Save
-4. Open Violentmonkey menu → ⚙️ Respect Settings
-5. Set App Server URL → Save → click "Login with GitHub"
-
-## Safety Guarantees
-
-- **Authentication**: OAuth login verifies your GitHub identity — nobody can
-  give respect on your behalf
-- **Username validation**: strict GitHub username regex before any write
-- **No self-respect**: you can't respect yourself
-- **Duplicate detection**: you can only respect each person once
-- **Concurrency**: per-user serialization prevents ledger races
-- **Schema validation**: ledgers validated against `schema.json`
-- **Error resilience**: malformed files are logged and skipped, never crash
-
-## Data Format
-
-**Ledger** (`respects/{user}.json`):
 ```json
 {
   "user": "alice",
   "given": {
     "bob": { "score": 5, "reason": "great code reviews", "at": "2026-07-22T12:00:00Z" }
-  },
-  "meta": { "updated": "2026-07-22T12:00:00Z", "version": 1 }
+  }
 }
 ```
 
-**Totals** (`aggregate/totals.json`):
+Totals are computed hourly (or on push) by `.github/workflows/aggregate.yml` into
+`aggregate/totals.json`:
+
 ```json
 {
-  "generated_at": "2026-07-22T12:17:00Z",
   "total_ledgers": 42,
   "users": {
     "bob": { "score": 127, "respecters": 15 }

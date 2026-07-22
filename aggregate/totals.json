@@ -1,5 +1,10 @@
 {
-  "generated_at": null,
-  "total_ledgers": 0,
-  "users": {}
+  "generated_at": "2026-07-22T17:01:26Z",
+  "total_ledgers": 1,
+  "users": {
+    "jonathanhefner": {
+      "score": 5,
+      "respecters": 1
+    }
+  }
 }

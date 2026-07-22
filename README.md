@@ -20,8 +20,10 @@ shows scores next to usernames everywhere.
 
 ### Quick start
 
-[Install the userscript](https://github.com/grave0x/respectfb/raw/main/userscript/github-respect.user.js).
-Set the App server URL in settings. Login with GitHub.
+App: https://gitprops-app.fly.dev  
+Userscript: [github-respect.user.js](https://github.com/grave0x/gitprops/raw/main/userscript/github-respect.user.js)
+
+Set the App server URL to `https://gitprops-app.fly.dev` in userscript settings, then login.
 
 ## How data is stored
 

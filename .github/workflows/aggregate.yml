@@ -1,0 +1,138 @@
+name: Aggregate Respect Data
+
+on:
+  schedule:
+    - cron: "17 * * * *"   # hourly
+  workflow_dispatch:        # manual trigger
+  push:
+    paths:
+      - "respects/*.json"   # auto-run after give-respect commits
+
+permissions:
+  contents: write
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Aggregate respect totals
+        run: |
+          pip install --quiet jsonschema 2>/dev/null || true
+          python3 << 'PYEOF'
+          import json, os, glob, sys
+          from collections import defaultdict
+          from datetime import datetime, timezone
+
+          # H3: Optional schema validation
+          schema = None
+          if os.path.exists("schema.json"):
+              try:
+                  with open("schema.json", encoding="utf-8") as f:
+                      schema = json.load(f)
+              except Exception:
+                  pass
+
+          scores = defaultdict(int)
+          respecters = defaultdict(set)
+          errors = []
+          skipped = 0
+
+          for path in sorted(glob.glob("respects/*.json")):
+              username = os.path.splitext(os.path.basename(path))[0]
+              try:
+                  with open(path, encoding="utf-8") as f:
+                      raw = f.read()
+                  if not raw.strip():
+                      errors.append(f"{username}: empty file")
+                      skipped += 1
+                      continue
+                  ledger = json.loads(raw)
+              except json.JSONDecodeError as e:
+                  errors.append(f"{username}: invalid JSON — {e}")
+                  skipped += 1
+                  continue
+              except Exception as e:
+                  errors.append(f"{username}: read error — {e}")
+                  skipped += 1
+                  continue
+
+              # H2: Skip ledgers missing required fields
+              if not isinstance(ledger, dict):
+                  errors.append(f"{username}: not a JSON object")
+                  skipped += 1
+                  continue
+              if "user" not in ledger or "given" not in ledger:
+                  errors.append(f"{username}: missing required fields (user, given)")
+                  skipped += 1
+                  continue
+
+              # H3: Validate against schema if available
+              if schema is not None:
+                  try:
+                      import jsonschema
+                      jsonschema.validate(ledger, schema)
+                  except ImportError:
+                      pass
+                  except jsonschema.ValidationError as e:
+                      errors.append(f"{username}: schema violation — {e.message}")
+                      skipped += 1
+                      continue
+
+              giver = ledger.get("user", username)
+              given = ledger.get("given", {})
+
+              if not isinstance(given, dict):
+                  errors.append(f"{username}: 'given' is not an object")
+                  skipped += 1
+                  continue
+
+              # C5: Deduplication — use latest entry per target (files are sorted by name,
+              # last write wins; for same-giver, the ledger is authoritative)
+              for target, entry in given.items():
+                  if not isinstance(entry, dict):
+                      errors.append(f"{username}: invalid entry for '{target}'")
+                      continue
+                  s = entry.get("score", 0)
+                  if not isinstance(s, (int, float)) or s < 1 or s > 5:
+                      errors.append(f"{username}: invalid score {s} for '{target}'")
+                      continue
+                  scores[target] += int(s)
+                  respecters[target].add(giver)
+
+          # M2: Output format matching README spec
+          totals = {
+              "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "total_ledgers": len(glob.glob("respects/*.json")) - skipped,
+              "users": {
+                  user: {"score": scores[user], "respecters": len(respecters[user])}
+                  for user in sorted(scores, key=lambda u: scores[u], reverse=True)
+              },
+          }
+
+          os.makedirs("aggregate", exist_ok=True)
+          with open("aggregate/totals.json", "w", encoding="utf-8") as f:
+              json.dump(totals, f, indent=2)
+              f.write("\n")
+
+          print(f"Aggregated {totals['total_ledgers']} ledgers → {len(totals['users'])} users")
+          if skipped > 0:
+              print(f"Skipped {skipped} invalid ledger(s)", file=sys.stderr)
+          if errors:
+              print("Errors:", file=sys.stderr)
+              for e in errors:
+                  print(f"  - {e}", file=sys.stderr)
+          PYEOF
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "respectfb-bot"
+          git config user.email "bot@respectfb.dev"
+          git add aggregate/totals.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: aggregate respect totals [skip ci]"
+            git push
+          fi

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://respectfb.dev/schema/respect-ledger.json",
+  "title": "Respect Ledger",
+  "description": "A user's respect ledger — who they respect and why.",
+  "type": "object",
+  "required": ["user", "given", "meta"],
+  "properties": {
+    "user": {
+      "type": "string",
+      "description": "GitHub username of the ledger owner (who gave the respect)."
+    },
+    "given": {
+      "type": "object",
+      "description": "Map of target usernames to respect entries.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["score", "at"],
+        "properties": {
+          "score": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Respect score from 1 (nod of approval) to 5 (lifetime achievement)."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 280,
+            "description": "Short reason for the respect."
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when respect was given."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": ["updated", "version"],
+      "properties": {
+        "updated": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "version": {
+          "type": "integer",
+          "const": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

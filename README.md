@@ -1,5 +1,7 @@
 # gitprops
 
+[![gitprops](https://gitprops-app.fly.dev/badge/grave0x)](https://github.com/grave0x/gitprops)
+
 Give props to people on GitHub. Data lives in git.
 
 ## What it does
@@ -53,3 +55,11 @@ Totals are computed hourly (or on push) by `.github/workflows/aggregate.yml` int
 ## License
 
 MIT
+
+## Badge
+
+Embed your props score in any README:
+
+```markdown
+[![gitprops](https://gitprops-app.fly.dev/badge/YOUR_USERNAME)](https://github.com/grave0x/gitprops)
+```
